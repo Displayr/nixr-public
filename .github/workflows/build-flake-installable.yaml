@@ -1,0 +1,105 @@
+name: Build flake installable
+
+on:
+  workflow_call:
+    inputs:
+      installable-path:
+        required: true
+        type: string
+      build-args:
+        required: false
+        type: string
+jobs:
+  build-flake-installable:
+    name: Build ${{ inputs.installable-path }}
+    permissions:
+      checks: write
+      contents: read
+    runs-on: [self-hosted, linux, X64, nix]
+    env:
+      # TODO: remove ref when merging PR
+      NIXR_FLAKE_URI: git+ssh://git@github.com/DisplayR/NixR?ref=DPI-2964-add-nix-ci&rev=5dcfcf209800baf21e5b41f513cf8a9a1edb665f
+      INSTALLABLE_PATH: git+ssh://git@github.com/DisplayR/NixR?ref=DPI-2964-add-nix-ci&rev=5dcfcf209800baf21e5b41f513cf8a9a1edb665f#${{ inputs.installable-path }}
+ 
+    timeout-minutes: 360 # Building chromium takes a very, very long time.
+    steps:
+      - name: Configure SSH access
+        id: configure-ssh
+        env:
+          GH_R_PACKAGES_READ_ONLY: ${{ secrets.R_PACKAGES_READONLY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$GH_R_PACKAGES_READ_ONLY" > ~/.ssh/gh_r_packages_read_only
+          chmod 700 ~/.ssh/gh_r_packages_read_only
+          # Create SSH socket file to persist addition of SSH key via ssh-add. It is done this way as adding it to the working directory caused a failure in the nix expression 'toString ./.'. 
+          # Start ssh-agent. The dry run flag (-u) is used as if the socket file is created by mktemp, ssh-agent considers it "in use" and refuses to use it.
+          export SSH_AUTH_SOCK=$(mktemp -u --suffix=ssh-socket)
+          ssh-agent -a $SSH_AUTH_SOCK > /dev/null	
+          ssh-add ~/.ssh/gh_r_packages_read_only
+          ssh-add -L
+          echo "ssh_auth_sock=$SSH_AUTH_SOCK" >> $GITHUB_OUTPUT
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check if internal R package
+        id: check-internal-r-package
+        env:
+          SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
+        run: |
+          # Use the isInternalPackage function defined in displayrUtils
+          IS_INTERNAL=$(nix eval --raw --impure --expr "let
+            isInternalPackage = (builtins.getFlake \"${NIXR_FLAKE_URI}\").pkgs.x86_64-linux.displayrUtils.isInternalPackage \"${INSTALLABLE_PATH}\";
+          in
+            if isInternalPackage then \"1\" else \"0\"
+          ")
+          echo "is_internal_r_package=$IS_INTERNAL" >> $GITHUB_OUTPUT
+      - name: Build ${{ inputs.installable-path }}
+        env:
+          SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+        run: |
+          echo "Building $INSTALLABLE_PATH with build args:\n$BUILD_ARGS"
+          if [ -e "./result" ]; then
+            rm -r "./result";
+          fi
+          nix build $INSTALLABLE_PATH --print-build-logs $BUILD_ARGS 
+          nix log "./result"
+      - name: R CMD CHECK ${{ inputs.installable-path }}
+        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1'
+        env:
+          SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+        run: |
+          echo "Running R CMD CHECK for $INSTALLABLE_PATH with build args:\n$BUILD_ARGS"
+          if [ -e "./result" ]; then
+            rm -r "./result";
+          fi
+          nix build $INSTALLABLE_PATH.passthru.RCMDCHECK --print-build-logs $BUILD_ARGS 
+          nix log "./result"
+      - name: Test ${{ inputs.installable-path }}
+        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1'
+        env:
+          SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+        run: |
+          echo "Testing $INSTALLABLE_PATH with build args:\n$BUILD_ARGS"
+          if [ -e "./result" ]; then
+            rm -r "./result";
+          fi
+          nix build $INSTALLABLE_PATH.passthru.tests --print-build-logs $BUILD_ARGS 
+          nix log "./result"
+          # The nix derivation succeeds even if the individual tests fail, but writes the result of all of the tests (collective pass/fail) to the status file in the output directory.
+          # This allows us to know if the test derivation itself is failing (unrelated to the tests) separately to the outcome of the tests themselves.
+          exit $(cat "./result/status")
+      - name: Publish Test Report
+        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1' && always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: './result/testthat.xml'
+      - name: Cleanup job specific SSH socket
+        if: always()
+        env:
+          SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
+        run: rm "$SSH_AUTH_SOCK"
+
