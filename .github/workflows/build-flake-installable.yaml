@@ -17,9 +17,8 @@ jobs:
       contents: read
     runs-on: [self-hosted, linux, X64, nix]
     env:
-      # TODO: remove ref when merging PR
-      NIXR_FLAKE_URI: git+ssh://git@github.com/DisplayR/NixR?ref=DPI-2964-add-nix-ci&rev=5dcfcf209800baf21e5b41f513cf8a9a1edb665f
-      INSTALLABLE_PATH: git+ssh://git@github.com/DisplayR/NixR?ref=DPI-2964-add-nix-ci&rev=5dcfcf209800baf21e5b41f513cf8a9a1edb665f#${{ inputs.installable-path }}
+      NIXR_FLAKE_URI: git+ssh://git@github.com/DisplayR/NixR
+      INSTALLABLE_PATH: git+ssh://git@github.com/DisplayR/NixR#${{ inputs.installable-path }}
  
     timeout-minutes: 360 # Building chromium takes a very, very long time.
     steps:
