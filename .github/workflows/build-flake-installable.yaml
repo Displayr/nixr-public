@@ -6,12 +6,16 @@ on:
       installable-path:
         required: true
         type: string
+      installable-name:
+        required: false
+        type: string
+        description: 'Human readable name of the installable. The installable-path will be used as a fallback.'
       build-args:
         required: false
         type: string
 jobs:
   build-flake-installable:
-    name: Build ${{ inputs.installable-path }}
+    name: Build ${{ inputs.installable-name && inputs.installable-name || inputs.installable-path }}
     permissions:
       checks: write
       contents: read
@@ -96,6 +100,7 @@ jobs:
         uses: mikepenz/action-junit-report@v5
         with:
           report_paths: './result/testthat.xml'
+          check_name: 'Test report -  ${{ inputs.installable-name }}'
       - name: Cleanup job specific SSH socket
         if: always()
         env:
