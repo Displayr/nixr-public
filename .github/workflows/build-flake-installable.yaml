@@ -21,8 +21,8 @@ jobs:
       contents: read
     runs-on: [self-hosted, linux, X64, nix]
     env:
-      NIXR_FLAKE_URI: git+ssh://git@github.com/DisplayR/NixR?ref=DPI-2964-add-other-internal-rpackages
-      INSTALLABLE_PATH: git+ssh://git@github.com/DisplayR/NixR?ref=DPI-2964-add-other-internal-rpackages#${{ inputs.installable-path }}
+      NIXR_FLAKE_URI: git+ssh://git@github.com/DisplayR/NixR?ref=DPI-2964-add-other-internal-rpackages&ref=f6d86b87d767e8c6b119b9e45fb08f499e3e0595
+      INSTALLABLE_PATH: git+ssh://git@github.com/DisplayR/NixR?ref=DPI-2964-add-other-internal-rpackages&ref=f6d86b87d767e8c6b119b9e45fb08f499e3e0595#${{ inputs.installable-path }}
  
     timeout-minutes: 360 # Building chromium takes a very, very long time.
     steps:
