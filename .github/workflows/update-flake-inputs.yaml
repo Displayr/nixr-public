@@ -1,0 +1,59 @@
+
+name: "Flake.lock: update Nix dependencies"
+
+on:
+  workflow_call: # allows manual triggering
+    inputs:
+      inputs_to_update:
+        description: 'Space-separated list of inputs to update (leave empty to update all)'
+        required: false
+        type: string
+      base:
+        description: 'Target branch for the PR'
+        required: false
+        type: string
+
+jobs:
+  nix-flake-update:
+    permissions:
+      contents: write
+      id-token: write
+      issues: write
+      pull-requests: write
+    runs-on: [self-hosted, linux, X64, nix]
+    steps:
+      - name: Configure SSH access
+        id: configure-ssh
+        env:
+          GH_R_PACKAGES_READ_ONLY: ${{ secrets.R_PACKAGES_READONLY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$GH_R_PACKAGES_READ_ONLY" > ~/.ssh/gh_r_packages_read_only
+          chmod 700 ~/.ssh/gh_r_packages_read_only
+          # Create SSH socket file to persist addition of SSH key via ssh-add. It is done this way as adding it to the working directory caused a failure in the nix expression 'toString ./.'. 
+          # Start ssh-agent. The dry run flag (-u) is used as if the socket file is created by mktemp, ssh-agent considers it "in use" and refuses to use it.
+          export SSH_AUTH_SOCK=$(mktemp -u --suffix=ssh-socket)
+          ssh-agent -a $SSH_AUTH_SOCK > /dev/null	
+          ssh-add ~/.ssh/gh_r_packages_read_only
+          echo "ssh_auth_sock=$SSH_AUTH_SOCK" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v4
+      - run: |
+          nix profile install nixpkgs#nodejs_24
+      - uses: DeterminateSystems/update-flake-lock@main
+        env:
+          SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
+          GH_READ_ONLY_PAT: ${{ secrets.GH_READ_ONLY_PAT }}
+        with:
+          pr-title: "Update Nix flake inputs${{ github.event.inputs.inputs_to_update && format(': {0}', github.event.inputs.inputs_to_update) || '' }}"
+          pr-labels: |
+            dependencies
+            automated
+          inputs: ${{ github.event.inputs.inputs_to_update || '' }}
+          base: ${{ github.event.inputs.base }}
+          branch: ${{ github.ref_name }}_update-flake-lock-action
+          nix-options: --option access-tokens "github.com=$GH_READ_ONLY_PAT"
+      - name: Cleanup job specific SSH socket
+        if: always()
+        env:
+          SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
+        run: rm "$SSH_AUTH_SOCK"
