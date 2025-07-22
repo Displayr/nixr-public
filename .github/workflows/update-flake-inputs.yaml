@@ -43,6 +43,7 @@ jobs:
         env:
           SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
           GH_READ_ONLY_PAT: ${{ secrets.GH_READ_ONLY_PAT }}
+          NIX_CONFIG: access-tokens = github.com=${{ secrets.GH_READ_ONLY_PAT }}
         with:
           pr-title: "Update Nix flake inputs${{ github.event.inputs.inputs_to_update && format(': {0}', github.event.inputs.inputs_to_update) || '' }}"
           pr-labels: |
@@ -51,7 +52,6 @@ jobs:
           inputs: ${{ github.event.inputs.inputs_to_update || '' }}
           base: ${{ github.event.inputs.base }}
           branch: ${{ github.ref_name }}_update-flake-lock-action
-          nix-options: --option access-tokens "github.com=$GH_READ_ONLY_PAT"
       - name: Cleanup job specific SSH socket
         if: always()
         env:
