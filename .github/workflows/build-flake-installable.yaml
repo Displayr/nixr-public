@@ -25,8 +25,8 @@ jobs:
       contents: read
     runs-on: [self-hosted, linux, X64, nix]
     env:
-      NIXR_FLAKE_URI: git+ssh://git@github.com/DisplayR/NixR${{ inputs.nixr-ref && '?ref=' + inputs.nixr-ref || '' }}
-      INSTALLABLE_PATH: git+ssh://git@github.com/DisplayR/NixR${{ inputs.nixr-ref && '?ref=' + inputs.nixr-ref || '' }}#${{ inputs.installable-path }}
+      NIXR_FLAKE_URI: git+ssh://git@github.com/DisplayR/NixR${{ inputs.nixr-ref && format('?ref={0}', inputs.nixr-ref) || '' }}
+      INSTALLABLE_PATH: git+ssh://git@github.com/DisplayR/NixR${{ inputs.nixr-ref && format('?ref={0}', inputs.nixr-ref) || '' }}#${{ inputs.installable-path }}
  
     timeout-minutes: 360 # Building chromium takes a very, very long time.
     steps:
