@@ -10,6 +10,10 @@ on:
         required: false
         type: string
         description: 'Human readable name of the installable. The installable-path will be used as a fallback.'
+      nixr-ref:
+        required: false
+        type: string
+        description: 'The ref of the NixR repository to use. If not specified, the default branch will be used. This should usually be the github.sha of the commit that triggered the workflow.'
       build-args:
         required: false
         type: string
@@ -21,8 +25,8 @@ jobs:
       contents: read
     runs-on: [self-hosted, linux, X64, nix]
     env:
-      NIXR_FLAKE_URI: git+ssh://git@github.com/DisplayR/NixR
-      INSTALLABLE_PATH: git+ssh://git@github.com/DisplayR/NixR#${{ inputs.installable-path }}
+      NIXR_FLAKE_URI: git+ssh://git@github.com/DisplayR/NixR${{ inputs.nixr-ref && format('?ref={0}', inputs.nixr-ref) || '' }}
+      INSTALLABLE_PATH: git+ssh://git@github.com/DisplayR/NixR${{ inputs.nixr-ref && format('?ref={0}', inputs.nixr-ref) || '' }}#${{ inputs.installable-path }}
  
     timeout-minutes: 360 # Building chromium takes a very, very long time.
     steps:
