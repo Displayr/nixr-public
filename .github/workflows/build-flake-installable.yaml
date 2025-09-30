@@ -17,6 +17,16 @@ on:
       build-args:
         required: false
         type: string
+      run-rcmdcheck:
+        required: false
+        type: boolean
+        default: false
+        description: 'Whether to run R CMD CHECK on the package.'
+      run-tests:
+        required: false
+        type: boolean
+        default: false
+        description: 'Whether to run tests on the package.'
 jobs:
   build-flake-installable:
     name: Build ${{ inputs.installable-name && inputs.installable-name || inputs.installable-path }}
@@ -73,7 +83,7 @@ jobs:
           nix build $INSTALLABLE_PATH --print-build-logs $BUILD_ARGS 
           nix log "./result"
       - name: R CMD CHECK ${{ inputs.installable-path }}
-        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1'
+        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-rcmdcheck
         env:
           SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
           BUILD_ARGS: ${{ inputs.build-args }}
@@ -85,7 +95,7 @@ jobs:
           nix build $INSTALLABLE_PATH.passthru.RCMDCHECK --print-build-logs $BUILD_ARGS 
           nix log "./result"
       - name: Test ${{ inputs.installable-path }}
-        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1'
+        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests
         env:
           SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
           BUILD_ARGS: ${{ inputs.build-args }}
@@ -100,7 +110,7 @@ jobs:
           # This allows us to know if the test derivation itself is failing (unrelated to the tests) separately to the outcome of the tests themselves.
           exit $(cat "./result/status")
       - name: Publish Test Report
-        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1' && always()
+        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests && always()
         uses: mikepenz/action-junit-report@v5
         with:
           report_paths: './result/testthat.xml'
