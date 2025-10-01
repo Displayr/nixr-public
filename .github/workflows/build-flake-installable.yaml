@@ -29,7 +29,7 @@ on:
         description: 'Whether to run tests on the package.'
 jobs:
   build-flake-installable:
-    name: ${{ inputs.installable-name && inputs.installable-name || inputs.installable-path }} build${{ inputs.run-rcmdcheck && ', R CMD CHECK'}}${{ inputs.run-tests && ' & test'}}
+    name: ${{ inputs.installable-name && inputs.installable-name || inputs.installable-path }} build${{ inputs.run-rcmdcheck && ', R CMD CHECK' || ''}}${{ inputs.run-tests && ' & test' || ''}}
     permissions:
       checks: write
       contents: read
