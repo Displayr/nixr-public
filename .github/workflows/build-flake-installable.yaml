@@ -41,10 +41,12 @@ jobs:
           # Create SSH socket file to persist addition of SSH key via ssh-add. It is done this way as adding it to the working directory caused a failure in the nix expression 'toString ./.'. 
           # Start ssh-agent. The dry run flag (-u) is used as if the socket file is created by mktemp, ssh-agent considers it "in use" and refuses to use it.
           export SSH_AUTH_SOCK=$(mktemp -u --suffix=ssh-socket)
-          ssh-agent -a $SSH_AUTH_SOCK > /dev/null	
+          eval "$(ssh-agent -s -a "$SSH_AUTH_SOCK")" > /dev/null
+          # Written before ssh-add so the cleanup step can stop the agent even if ssh-add fails.
+          echo "ssh_auth_sock=$SSH_AUTH_SOCK" >> $GITHUB_OUTPUT
+          echo "ssh_agent_pid=$SSH_AGENT_PID" >> $GITHUB_OUTPUT
           ssh-add ~/.ssh/gh_r_packages_read_only
           ssh-add -L
-          echo "ssh_auth_sock=$SSH_AUTH_SOCK" >> $GITHUB_OUTPUT
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -109,5 +111,8 @@ jobs:
         if: always()
         env:
           SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
-        run: rm "$SSH_AUTH_SOCK"
+          SSH_AGENT_PID: ${{ steps.configure-ssh.outputs.ssh_agent_pid }}
+        run: |
+          ssh-agent -k > /dev/null || true
+          rm -f "$SSH_AUTH_SOCK"
 
