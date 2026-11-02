@@ -67,11 +67,10 @@ jobs:
           BUILD_ARGS: ${{ inputs.build-args }}
         run: |
           echo "Building $INSTALLABLE_PATH with build args:\n$BUILD_ARGS"
-          if [ -e "./result" ]; then
-            rm -r "./result";
-          fi
-          nix build $INSTALLABLE_PATH --print-build-logs $BUILD_ARGS 
-          nix log "./result"
+          # Out-links go in RUNNER_TEMP, which the runner empties at the start and end of every job, so no job can
+          # read another job's output and the GC roots they create last only as long as the job.
+          nix build $INSTALLABLE_PATH --print-build-logs $BUILD_ARGS --out-link "$RUNNER_TEMP/result-build"
+          nix log "$RUNNER_TEMP/result-build"
       - name: R CMD CHECK ${{ inputs.installable-path }}
         if: steps.check-internal-r-package.outputs.is_internal_r_package == '1'
         env:
@@ -79,32 +78,29 @@ jobs:
           BUILD_ARGS: ${{ inputs.build-args }}
         run: |
           echo "Running R CMD CHECK for $INSTALLABLE_PATH with build args:\n$BUILD_ARGS"
-          if [ -e "./result" ]; then
-            rm -r "./result";
-          fi
-          nix build $INSTALLABLE_PATH.passthru.RCMDCHECK --print-build-logs $BUILD_ARGS 
-          nix log "./result"
+          nix build $INSTALLABLE_PATH.passthru.RCMDCHECK --print-build-logs $BUILD_ARGS --out-link "$RUNNER_TEMP/result-check"
+          nix log "$RUNNER_TEMP/result-check"
       - name: Test ${{ inputs.installable-path }}
+        id: test
         if: steps.check-internal-r-package.outputs.is_internal_r_package == '1'
         env:
           SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
           BUILD_ARGS: ${{ inputs.build-args }}
         run: |
           echo "Testing $INSTALLABLE_PATH with build args:\n$BUILD_ARGS"
-          if [ -e "./result" ]; then
-            rm -r "./result";
-          fi
-          nix build $INSTALLABLE_PATH.passthru.tests --print-build-logs $BUILD_ARGS 
-          nix log "./result"
+          nix build $INSTALLABLE_PATH.passthru.tests --print-build-logs $BUILD_ARGS --out-link "$RUNNER_TEMP/result-tests"
+          nix log "$RUNNER_TEMP/result-tests"
           # The nix derivation succeeds even if the individual tests fail, but writes the result of all of the tests (collective pass/fail) to the status file in the output directory.
           # This allows us to know if the test derivation itself is failing (unrelated to the tests) separately to the outcome of the tests themselves.
-          exit $(cat "./result/status")
+          exit $(cat "$RUNNER_TEMP/result-tests/status")
       - name: Publish Test Report
-        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1' && always()
+        if: always() && (steps.test.outcome == 'success' || steps.test.outcome == 'failure')
         uses: mikepenz/action-junit-report@v5
         with:
-          report_paths: './result/testthat.xml'
+          report_paths: '${{ runner.temp }}/result-tests/testthat.xml'
           check_name: 'Test report -  ${{ inputs.installable-name }}'
+          # A missing testthat.xml means the tests never ran; report that as a failure rather than an empty pass.
+          require_tests: true
       - name: Cleanup job specific SSH socket
         if: always()
         env:
