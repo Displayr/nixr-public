@@ -63,8 +63,6 @@ jobs:
           echo "is_internal_r_package=$IS_INTERNAL" >> $GITHUB_OUTPUT
       - name: Create job output directory
         id: out
-        # A fresh directory per job, so no step can read another job's out-links. The runner's own RUNNER_TEMP cleanup
-        # can't remove links into the read-only Nix store, so the last step removes this directory explicitly.
         run: echo "dir=$(mktemp -d "$RUNNER_TEMP/nix-out.XXXXXX")" >> "$GITHUB_OUTPUT"
       - name: Build ${{ inputs.installable-path }}
         env:
@@ -105,7 +103,6 @@ jobs:
         with:
           report_paths: '${{ steps.out.outputs.dir }}/result-tests/testthat.xml'
           check_name: 'Test report -  ${{ inputs.installable-name }}'
-          # A missing testthat.xml means the tests never ran; report that as a failure rather than an empty pass.
           require_tests: true
       - name: Cleanup job specific SSH socket
         if: always()
@@ -116,6 +113,5 @@ jobs:
         if: always() && steps.out.outputs.dir != ''
         env:
           OUT_DIR: ${{ steps.out.outputs.dir }}
-        # Removes the out-links (and so their GC roots), not the store paths they point to.
         run: rm -rf "$OUT_DIR"
 
