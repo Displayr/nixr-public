@@ -63,7 +63,9 @@ jobs:
           echo "is_internal_r_package=$IS_INTERNAL" >> $GITHUB_OUTPUT
       - name: Create job output directory
         id: out
-        run: echo "dir=$(mktemp -d "$RUNNER_TEMP/nix-out.XXXXXX")" >> "$GITHUB_OUTPUT"
+        run: |
+          dir=$(mktemp -d "$RUNNER_TEMP/nix-out.XXXXXX")
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
       - name: Build ${{ inputs.installable-path }}
         env:
           SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
@@ -115,5 +117,11 @@ jobs:
         env:
           OUT_DIR: ${{ steps.out.outputs.dir }}
         # Removes the out-links (and so their GC roots), not the store paths they point to.
-        run: rm -rf "$OUT_DIR"
+        run: |
+          if [ -n "$RUNNER_TEMP" ] && [ "${OUT_DIR%/*}" = "$RUNNER_TEMP" ] && [[ "${OUT_DIR##*/}" == nix-out.?* ]]; then
+            rm -rf "$OUT_DIR"
+          else
+            echo "Not removing unexpected path: $OUT_DIR"
+            exit 1
+          fi
 
