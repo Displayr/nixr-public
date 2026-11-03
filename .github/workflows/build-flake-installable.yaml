@@ -17,6 +17,11 @@ on:
       build-args:
         required: false
         type: string
+      run-tests:
+        required: false
+        type: boolean
+        default: true
+        description: "Whether to run an internal R package's tests. When false, the package is still built and checked, but its tests aren't run and no test report is published."
 jobs:
   build-flake-installable:
     name: Build ${{ inputs.installable-name && inputs.installable-name || inputs.installable-path }}
@@ -87,7 +92,7 @@ jobs:
           nix log "$OUT_DIR/result-check"
       - name: Test ${{ inputs.installable-path }}
         id: test
-        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1'
+        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests
         env:
           SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
           BUILD_ARGS: ${{ inputs.build-args }}
