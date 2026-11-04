@@ -88,8 +88,10 @@ jobs:
           OUT_DIR: ${{ steps.out.outputs.dir }}
         run: |
           echo "Running R CMD CHECK for $INSTALLABLE_PATH with build args:\n$BUILD_ARGS"
-          nix build $INSTALLABLE_PATH.passthru.RCMDCHECK --print-build-logs $BUILD_ARGS --out-link "$OUT_DIR/result-check"
-          nix log "$OUT_DIR/result-check"
+          # NixR's ci-run script builds the check, prints its log and exits with its status. On a re-run of this job it
+          # reruns a check whose failure was cached; see ci-run.sh in NixR.
+          # shellcheck disable=SC2086 # BUILD_ARGS holds several arguments.
+          nix run "$NIXR_FLAKE_URI#ci-run" -- RCMDCHECK "$INSTALLABLE_PATH" "$OUT_DIR/result-check" $BUILD_ARGS
       - name: Test ${{ inputs.installable-path }}
         id: test
         if: steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests
@@ -99,10 +101,10 @@ jobs:
           OUT_DIR: ${{ steps.out.outputs.dir }}
         run: |
           echo "Testing $INSTALLABLE_PATH with build args:\n$BUILD_ARGS"
-          # NixR's ci-tests script builds the tests, prints their log and exits with their status. On a re-run of this job
-          # it reruns tests whose failure was cached; see ci-tests.sh in NixR.
+          # NixR's ci-run script builds the tests, prints their log and exits with their status. On a re-run of this job
+          # it reruns tests whose failure was cached; see ci-run.sh in NixR.
           # shellcheck disable=SC2086 # BUILD_ARGS holds several arguments.
-          nix run "$NIXR_FLAKE_URI#ci-tests" -- "$INSTALLABLE_PATH" "$OUT_DIR/result-tests" $BUILD_ARGS
+          nix run "$NIXR_FLAKE_URI#ci-run" -- tests "$INSTALLABLE_PATH" "$OUT_DIR/result-tests" $BUILD_ARGS
       - name: Publish Test Report
         if: always() && (steps.test.outcome == 'success' || steps.test.outcome == 'failure')
         uses: mikepenz/action-junit-report@v5
