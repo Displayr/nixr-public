@@ -117,6 +117,54 @@ jobs:
           check_name: 'Test report -  ${{ inputs.installable-name }}'
           # A missing testthat.xml means the tests never ran; report that as a failure rather than an empty pass.
           require_tests: true
+      - name: Check for network tests
+        id: network-check
+        # Same conditions as the tests: they run after a failed R CMD check too.
+        if: ${{ !cancelled() && steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests && steps.build.outcome == 'success' }}
+        # Keep this env block's names identical to the next step's, apart from its secrets: that step passes into the
+        # sandbox exactly the variables it has and this one doesn't.
+        env:
+          SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+          OUT_DIR: ${{ steps.out.outputs.dir }}
+        run: |
+          # shellcheck disable=SC2086 # BUILD_ARGS holds several arguments.
+          has=$(nix eval --raw "$INSTALLABLE_PATH.passthru" --apply 'p: if p ? networkTestRunner then "1" else "0"' $BUILD_ARGS)
+          echo "has_network_tests=$has" >> "$GITHUB_OUTPUT"
+          env -0 | while IFS= read -r -d '' entry; do printf '%s\n' "${entry%%=*}"; done | sort > "$OUT_DIR/env-names"
+      - name: Network tests ${{ inputs.installable-path }}
+        id: network-test
+        if: ${{ !cancelled() && steps.network-check.outputs.has_network_tests == '1' }}
+        env:
+          SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+          OUT_DIR: ${{ steps.out.outputs.dir }}
+          # Secrets for network tests. Each line maps a repository or organisation secret to the environment variable
+          # a test reads, and only these variables enter the tests' sandbox. A test must skip or fail cleanly when its
+          # variable is missing, and must never print it. See "Tests that need network access" in NixR's README.
+          companySecret: ${{ secrets.COMPANY_SECRET }}
+        run: |
+          echo "Running the network tests of $INSTALLABLE_PATH with build args: $BUILD_ARGS"
+          pass=()
+          while IFS= read -r name; do
+            case "$name" in
+              GITHUB_*|RUNNER_*|ACTIONS_*|INPUT_*|STATE_*) ;;
+              *) pass+=(--pass-env "$name") ;;
+            esac
+          done < <(comm -13 "$OUT_DIR/env-names" <(env -0 | while IFS= read -r -d '' entry; do printf '%s\n' "${entry%%=*}"; done | sort))
+          # NixR's ci-network-tests script builds the package's networkTestRunner and runs it in a sandbox with outbound
+          # internet access only; see ci-network-tests.sh in NixR. The host's bubblewrap and pasta are the ones its
+          # AppArmor profiles allow to create user namespaces.
+          # shellcheck disable=SC2086 # BUILD_ARGS holds several arguments.
+          nix run "$NIXR_FLAKE_URI#ci-network-tests" -- --bwrap /usr/bin/bwrap --pasta /usr/bin/pasta "${pass[@]}" \
+            "$INSTALLABLE_PATH" "$OUT_DIR/network-tests" $BUILD_ARGS
+      - name: Publish Network Test Report
+        if: ${{ !cancelled() && (steps.network-test.outcome == 'success' || steps.network-test.outcome == 'failure') }}
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: '${{ steps.out.outputs.dir }}/network-tests/testthat.xml'
+          check_name: 'Network test report - ${{ inputs.installable-name }}'
+          require_tests: true
       - name: Find chart snapshot diffs
         id: snapshots
         # The tests only ran if the package built.
