@@ -72,6 +72,7 @@ jobs:
           dir=$(mktemp -d "$RUNNER_TEMP/nix-out.XXXXXX")
           echo "dir=$dir" >> "$GITHUB_OUTPUT"
       - name: Build ${{ inputs.installable-path }}
+        id: build
         env:
           SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
           BUILD_ARGS: ${{ inputs.build-args }}
@@ -94,7 +95,9 @@ jobs:
           nix run "$NIXR_FLAKE_URI#ci-run" -- RCMDCHECK "$INSTALLABLE_PATH" "$OUT_DIR/result-check" $BUILD_ARGS
       - name: Test ${{ inputs.installable-path }}
         id: test
-        if: steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests
+        # A failed R CMD check still fails the job, but the tests run and report anyway. They need the package to
+        # have built.
+        if: ${{ !cancelled() && steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests && steps.build.outcome == 'success' }}
         env:
           SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
           BUILD_ARGS: ${{ inputs.build-args }}
@@ -106,7 +109,7 @@ jobs:
           # shellcheck disable=SC2086 # BUILD_ARGS holds several arguments.
           nix run "$NIXR_FLAKE_URI#ci-run" -- tests "$INSTALLABLE_PATH" "$OUT_DIR/result-tests" $BUILD_ARGS
       - name: Publish Test Report
-        if: always() && (steps.test.outcome == 'success' || steps.test.outcome == 'failure')
+        if: ${{ !cancelled() && (steps.test.outcome == 'success' || steps.test.outcome == 'failure') }}
         uses: mikepenz/action-junit-report@v5
         with:
           report_paths: '${{ steps.out.outputs.dir }}/result-tests/testthat.xml'
