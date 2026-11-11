@@ -4,16 +4,16 @@
 version: 'v0.0.3'
 workflows:
     '.github/workflows/build-flake-installable.yaml':
-        - 'actions/checkout@v4.4.0'
-        - 'mikepenz/action-junit-report@v5.6.2'
+        - 'actions/checkout@v7.0.1'
+        - 'mikepenz/action-junit-report@v6.7.0'
 dependencies:
-    'actions/checkout@v4.4.0':
-        ref: 'v4.4.0'
-        commit: 'sha1-11d5960a326750d5838078e36cf38b85af677262'
+    'actions/checkout@v7.0.1':
+        ref: 'v7.0.1'
+        commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1'
         owner_id: 44036562
         repo_id: 197814629
-    'mikepenz/action-junit-report@v5.6.2':
-        ref: 'v5.6.2'
-        commit: 'sha1-3585e9575db828022551b4231f165eb59a0e74e3'
+    'mikepenz/action-junit-report@v6.7.0':
+        ref: 'v6.7.0'
+        commit: 'sha1-4a26df3e2ae132254ba12a53f65a388d0961e786'
         owner_id: 1476232
         repo_id: 330384746
