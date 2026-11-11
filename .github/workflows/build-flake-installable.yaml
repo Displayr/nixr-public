@@ -46,7 +46,7 @@ jobs:
           ssh-add -L
           echo "ssh_auth_sock=$SSH_AUTH_SOCK" >> $GITHUB_OUTPUT
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.4.0
         with:
           fetch-depth: 0
       - name: Check if internal R package
@@ -101,7 +101,7 @@ jobs:
           exit $(cat "./result/status")
       - name: Publish Test Report
         if: steps.check-internal-r-package.outputs.is_internal_r_package == '1' && always()
-        uses: mikepenz/action-junit-report@v5
+        uses: mikepenz/action-junit-report@v5.6.2
         with:
           report_paths: './result/testthat.xml'
           check_name: 'Test report -  ${{ inputs.installable-name }}'
