@@ -81,7 +81,9 @@ jobs:
         run: |
           echo "Building $INSTALLABLE_PATH with build args:\n$BUILD_ARGS"
           nix build $INSTALLABLE_PATH --print-build-logs $BUILD_ARGS --out-link "$OUT_DIR/result-build"
-          nix log "$OUT_DIR/result-build"
+          # A package that was copied into the store or substituted, rather than built on this machine, has no stored
+          # log, and the build itself has succeeded by this point.
+          nix log "$OUT_DIR/result-build" || echo "No stored build log for this package (it was built elsewhere or substituted)."
       - name: R CMD CHECK ${{ inputs.installable-path }}
         if: steps.check-internal-r-package.outputs.is_internal_r_package == '1'
         env:
@@ -94,11 +96,29 @@ jobs:
           # reruns a check whose failure was cached; see ci-run.sh in NixR.
           # shellcheck disable=SC2086 # BUILD_ARGS holds several arguments.
           nix run "$NIXR_FLAKE_URI#ci-run" -- RCMDCHECK "$INSTALLABLE_PATH" "$OUT_DIR/result-check" $BUILD_ARGS
+      - name: Check for tests
+        id: tests-check
+        # The tests' conditions, apart from this step's own result.
+        if: ${{ !cancelled() && steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests && steps.build.outcome == 'success' }}
+        env:
+          SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+          PACKAGE: ${{ inputs.installable-name && inputs.installable-name || inputs.installable-path }}
+        run: |
+          # A package without a tests/testthat directory has no tests, so its test run writes no testthat.xml and the
+          # report would fail. NixR's passthru.hasTests says which packages those are; a NixR that doesn't define it
+          # keeps every package's tests and report.
+          # shellcheck disable=SC2086 # BUILD_ARGS holds several arguments.
+          has=$(nix eval --raw "$INSTALLABLE_PATH.passthru" --apply 'p: if p.hasTests or true then "1" else "0"' $BUILD_ARGS)
+          echo "has_tests=$has" >> "$GITHUB_OUTPUT"
+          if [ "$has" = 0 ]; then
+            printf '\n::notice title=No tests::%s has no tests/testthat directory, so its tests and test report are skipped. R CMD check still runs.\n' "$PACKAGE"
+          fi
       - name: Test ${{ inputs.installable-path }}
         id: test
         # A failed R CMD check still fails the job, but the tests run and report anyway. They need the package to
         # have built.
-        if: ${{ !cancelled() && steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests && steps.build.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests && steps.build.outcome == 'success' && steps.tests-check.outputs.has_tests == '1' }}
         env:
           SSH_AUTH_SOCK: ${{ steps.configure-ssh.outputs.ssh_auth_sock }}
           BUILD_ARGS: ${{ inputs.build-args }}
@@ -120,7 +140,7 @@ jobs:
       - name: Check for network tests
         id: network-check
         # Same conditions as the tests: they run after a failed R CMD check too.
-        if: ${{ !cancelled() && steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests && steps.build.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.check-internal-r-package.outputs.is_internal_r_package == '1' && inputs.run-tests && steps.build.outcome == 'success' && steps.tests-check.outputs.has_tests == '1' }}
         # Keep this env block's names identical to the next step's, apart from its secrets: that step passes into the
         # sandbox exactly the variables it has and this one doesn't.
         env:
