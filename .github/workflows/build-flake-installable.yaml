@@ -81,7 +81,9 @@ jobs:
         run: |
           echo "Building $INSTALLABLE_PATH with build args:\n$BUILD_ARGS"
           nix build $INSTALLABLE_PATH --print-build-logs $BUILD_ARGS --out-link "$OUT_DIR/result-build"
-          nix log "$OUT_DIR/result-build"
+          # A package that was copied into the store or substituted, rather than built on this machine, has no stored
+          # log, and the build itself has succeeded by this point.
+          nix log "$OUT_DIR/result-build" || echo "No stored build log for this package (it was built elsewhere or substituted)."
       - name: R CMD CHECK ${{ inputs.installable-path }}
         if: steps.check-internal-r-package.outputs.is_internal_r_package == '1'
         env:
