@@ -47,15 +47,13 @@ jobs:
           GH_R_PACKAGES_READ_ONLY: ${{ secrets.R_PACKAGES_READONLY }}
           OUT_DIR: ${{ steps.out.outputs.dir }}
         run: |
-          KEY="$OUT_DIR/gh_r_packages_read_only"
-          (umask 077; echo "$GH_R_PACKAGES_READ_ONLY" > "$KEY")
           export SSH_AUTH_SOCK="$OUT_DIR/ssh-agent.sock"
           eval "$(ssh-agent -s -a "$SSH_AUTH_SOCK")" > /dev/null
           # Written before ssh-add so the cleanup step can stop the agent even if ssh-add fails.
           echo "ssh_auth_sock=$SSH_AUTH_SOCK" >> $GITHUB_OUTPUT
           echo "ssh_agent_pid=$SSH_AGENT_PID" >> $GITHUB_OUTPUT
-          ssh-add "$KEY"
-          rm "$KEY"
+          # Read from stdin so the private key is never written to disk.
+          printf '%s\n' "$GH_R_PACKAGES_READ_ONLY" | ssh-add -
           ssh-add -L
       - name: Checkout
         uses: actions/checkout@v4.4.0
